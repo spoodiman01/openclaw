@@ -1,0 +1,136 @@
+name: OpenClaw Persistent Run
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */5 * * *"   # every 5 hours
+
+jobs:
+  openclaw-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+
+    concurrency:
+      group: openclaw-run
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout public repo
+        uses: actions/checkout@v4
+
+      # 🔑 Clone PRIVATE repo
+      - name: Clone private sync repo
+        run: |
+          git clone https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git openclaw_sync || mkdir openclaw_sync
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget curl git rsync
+
+      - name: Install OpenClaw
+        run: |
+          npm install -g openclaw@latest
+          openclaw --version
+
+      - name: Disable problematic OpenClaw plugin
+        run: |
+          openclaw plugins disable acpx || true
+          openclaw plugins uninstall acpx || true
+
+      # 📂 Restore state (FIXED PATH)
+      - name: Restore OpenClaw State
+        run: |
+          mkdir -p ~/.openclaw
+
+          BASE="openclaw_sync/openclaw_sync"
+
+          [ -d "$BASE/workspace" ] && cp -a "$BASE/workspace" ~/.openclaw/workspace
+          [ -f "$BASE/openclaw.json" ] && cp "$BASE/openclaw.json" ~/.openclaw/openclaw.json
+          [ -f "$BASE/.env" ] && cp "$BASE/.env" ~/.openclaw/.env
+
+          [ -d "$BASE/memory" ] && cp -a "$BASE/memory" ~/.openclaw/
+          [ -d "$BASE/credentials" ] && cp -a "$BASE/credentials" ~/.openclaw/
+
+          echo "✅ State restored"
+
+      # 🔐 Auth setup
+      - name: Configure OpenClaw Google auth
+        run: |
+          mkdir -p ~/.openclaw/agents/main/agent
+
+          set -a
+          [ -f ~/.openclaw/.env ] && . ~/.openclaw/.env
+          set +a
+
+          KEY="${GOOGLE_API_KEY:-${GEMINI_API_KEYS%%,*}}"
+
+          if [ -z "$KEY" ]; then
+            echo "❌ Missing API key"
+            exit 1
+          fi
+
+          cat > ~/.openclaw/agents/main/agent/auth-profiles.json <<EOF
+          {
+            "version": 1,
+            "profiles": {
+              "google:default": {
+                "type": "api_key",
+                "provider": "google",
+                "key": "$KEY"
+              }
+            }
+          }
+          EOF
+
+      # 🚀 Run OpenClaw
+      - name: Run OpenClaw Gateway
+        run: |
+          openclaw gateway run &
+          sleep 20
+          echo "🚀 OpenClaw running..."
+
+          END=$((SECONDS+19800))
+
+          while [ $SECONDS -lt $END ]; do
+            echo "⏳ Alive: $SECONDS sec"
+            sleep 60
+          done
+
+          openclaw gateway stop || true
+
+      # 💾 Save and push state (FIXED PATH)
+      - name: Save and push state
+        run: |
+          cd openclaw_sync
+
+          BASE="openclaw_sync"
+
+          git config user.email "${{ secrets.GITHUBMAIL }}"
+          git config user.name "${{ secrets.GITHUBNAME }}"
+
+          mkdir -p $BASE/workspace $BASE/memory $BASE/credentials
+
+          rsync -av --exclude='venv' --exclude='node_modules' ~/.openclaw/workspace/ $BASE/workspace/
+          cp ~/.openclaw/openclaw.json $BASE/openclaw.json 2>/dev/null || true
+          cp ~/.openclaw/.env $BASE/.env 2>/dev/null || true
+          cp -r ~/.openclaw/memory/* $BASE/memory/ 2>/dev/null || true
+          cp -r ~/.openclaw/credentials/* $BASE/credentials/ 2>/dev/null || true
+
+          git add .
+
+          # handle first commit safely
+          git commit -m "Initial commit" || true
+
+          if git diff-index --quiet HEAD; then
+            git commit --allow-empty -m "Cycle restart"
+          else
+            git commit -m "Update OpenClaw state"
+          fi
+
+          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git
