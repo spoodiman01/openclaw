@@ -58,16 +58,6 @@ jobs:
           [ -d "$BASE/credentials" ] && cp -a "$BASE/credentials" ~/.openclaw/
 
           echo "✅ State restored"
-
-      # 🔍 DEBUG (very important for Telegram)
-      - name: Debug state
-        run: |
-          echo "---- ENV ----"
-          cat ~/.openclaw/.env || echo "No .env"
-
-          echo "---- FILES ----"
-          ls -R ~/.openclaw || true
-
       # 🔐 Auth setup
       - name: Configure OpenClaw Google auth
         run: |
