@@ -28,22 +28,22 @@ jobs:
         with:
           node-version: '24.x'
 
-      - name: Install System Dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget curl git rsync
+          sudo apt-get install -y wget curl git rsync jq
 
       - name: Install OpenClaw
         run: |
           npm install -g openclaw@latest
           openclaw --version
 
-      - name: Disable problematic OpenClaw plugin
+      - name: Disable problematic plugin
         run: |
           openclaw plugins disable acpx || true
           openclaw plugins uninstall acpx || true
 
-      # 📂 Restore state (FIXED PATH)
+      # 📂 Restore state (nested repo FIX)
       - name: Restore OpenClaw State
         run: |
           mkdir -p ~/.openclaw
@@ -58,6 +58,21 @@ jobs:
           [ -d "$BASE/credentials" ] && cp -a "$BASE/credentials" ~/.openclaw/
 
           echo "✅ State restored"
+
+      # 🔧 Disable Bonjour / discovery (fix error)
+      - name: Disable discovery
+        run: |
+          mkdir -p ~/.openclaw
+          echo '{"network":{"discovery":false}}' > ~/.openclaw/openclaw.json
+
+      # 🔍 DEBUG (very important for Telegram)
+      - name: Debug state
+        run: |
+          echo "---- ENV ----"
+          cat ~/.openclaw/.env || echo "No .env"
+
+          echo "---- FILES ----"
+          ls -R ~/.openclaw || true
 
       # 🔐 Auth setup
       - name: Configure OpenClaw Google auth
@@ -92,8 +107,11 @@ jobs:
       - name: Run OpenClaw Gateway
         run: |
           openclaw gateway run &
-          sleep 20
+          sleep 25
           echo "🚀 OpenClaw running..."
+
+          # extra debug
+          ps aux | grep openclaw || true
 
           END=$((SECONDS+19800))
 
@@ -104,7 +122,13 @@ jobs:
 
           openclaw gateway stop || true
 
-      # 💾 Save and push state (FIXED PATH)
+      # 📜 Show logs (helps debug Telegram)
+      - name: Show logs
+        run: |
+          echo "---- LOG OUTPUT ----"
+          find ~/.openclaw -name "*.log" -exec tail -n 50 {} \; || true
+
+      # 💾 Save state back (nested fix)
       - name: Save and push state
         run: |
           cd openclaw_sync
@@ -124,7 +148,6 @@ jobs:
 
           git add .
 
-          # handle first commit safely
           git commit -m "Initial commit" || true
 
           if git diff-index --quiet HEAD; then
