@@ -59,12 +59,6 @@ jobs:
 
           echo "✅ State restored"
 
-      # 🔧 Disable Bonjour / discovery (fix error)
-      - name: Disable discovery
-        run: |
-          mkdir -p ~/.openclaw
-          echo '{"network":{"discovery":false}}' > ~/.openclaw/openclaw.json
-
       # 🔍 DEBUG (very important for Telegram)
       - name: Debug state
         run: |
@@ -106,6 +100,7 @@ jobs:
       # 🚀 Run OpenClaw
       - name: Run OpenClaw Gateway
         run: |
+          openclaw gateway install
           openclaw gateway run &
           sleep 25
           echo "🚀 OpenClaw running..."
