@@ -2,8 +2,11 @@ name: OpenClaw Persistent Run
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main   # মেইন ব্রাঞ্চে যেকোনো কিছু পুশ করলেই এটি রান হবে
   schedule:
-    - cron: "0 */5 * * *"   # every 5 hours
+    - cron: "0 */5 * * *"   # প্রতি ৫ ঘণ্টা পরপর
 
 jobs:
   openclaw-run:
@@ -58,6 +61,7 @@ jobs:
           [ -d "$BASE/credentials" ] && cp -a "$BASE/credentials" ~/.openclaw/
 
           echo "✅ State restored"
+          
       # 🔐 Auth setup
       - name: Configure OpenClaw Google auth
         run: |
@@ -113,8 +117,8 @@ jobs:
           echo "---- LOG OUTPUT ----"
           find ~/.openclaw -name "*.log" -exec tail -n 50 {} \; || true
 
-      # 💾 Save state back (nested fix)
-      - name: Save and push state
+      # 💾 Save state back to PRIVATE repo
+      - name: Save and push state to Private Repo
         run: |
           cd openclaw_sync
 
@@ -142,3 +146,16 @@ jobs:
           fi
 
           git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git
+
+      # 🟢 Keep Public Repo Alive
+      - name: Empty Commit to Public Repo
+        run: |
+          # Checkout step-এর কারণে আমরা এখন ডিফল্টভাবে পাবলিক রিপোর রুট ডিরেক্টরিতে আছি
+          git config user.email "${{ secrets.GITHUBMAIL }}"
+          git config user.name "${{ secrets.GITHUBNAME }}"
+          
+          # একটি এম্পটি কমিট তৈরি করা হচ্ছে
+          git commit --allow-empty -m "Keepalive: Run cycle completed at $(date)"
+          
+          # পাবলিক রিপোজিটরিতে পুশ করা হচ্ছে
+          git push origin main
