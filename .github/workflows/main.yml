@@ -102,7 +102,7 @@ jobs:
           # extra debug
           ps aux | grep openclaw || true
 
-          END=$((SECONDS+19800))
+          END=$((SECONDS+17700))
 
           while [ $SECONDS -lt $END ]; do
             echo "⏳ Alive: $SECONDS sec"
