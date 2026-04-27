@@ -4,9 +4,13 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main   # মেইন ব্রাঞ্চে যেকোনো কিছু পুশ করলেই এটি রান হবে
+      - main
   schedule:
-    - cron: "0 */5 * * *"   # প্রতি ৫ ঘণ্টা পরপর
+    - cron: "0 */5 * * *"   # every 5 hours
+
+# 🔐 IMPORTANT: allow push
+permissions:
+  contents: write
 
 jobs:
   openclaw-run:
@@ -18,50 +22,55 @@ jobs:
       cancel-in-progress: true
 
     steps:
+      # 📥 Checkout PUBLIC repo (this repo)
       - name: Checkout public repo
         uses: actions/checkout@v4
 
-      # 🔑 Clone PRIVATE repo
+      # 🔑 Clone PRIVATE repo (state storage)
       - name: Clone private sync repo
         run: |
-          git clone https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git openclaw_sync || mkdir openclaw_sync
+          git clone https://${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git openclaw_sync || mkdir openclaw_sync
 
+      # 🟢 Node setup
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24.x'
 
+      # 📦 Install deps
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y wget curl git rsync jq
 
+      # ⚙️ Install OpenClaw
       - name: Install OpenClaw
         run: |
           npm install -g openclaw@2026.4.22
           openclaw --version
 
+      # ❌ Disable problematic plugin
       - name: Disable problematic plugin
         run: |
           openclaw plugins disable acpx || true
           openclaw plugins uninstall acpx || true
 
-      # 📂 Restore state (nested repo FIX)
+      # 📂 Restore state
       - name: Restore OpenClaw State
         run: |
           mkdir -p ~/.openclaw
 
-          BASE="openclaw_sync/openclaw_sync"
+          BASE="openclaw_sync"
 
-          [ -d "$BASE/workspace" ] && cp -a "$BASE/workspace" ~/.openclaw/workspace
-          [ -f "$BASE/openclaw.json" ] && cp "$BASE/openclaw.json" ~/.openclaw/openclaw.json
-          [ -f "$BASE/.env" ] && cp "$BASE/.env" ~/.openclaw/.env
+          [ -d "$BASE/workspace" ] && cp -a "$BASE/workspace" ~/.openclaw/
+          [ -f "$BASE/openclaw.json" ] && cp "$BASE/openclaw.json" ~/.openclaw/
+          [ -f "$BASE/.env" ] && cp "$BASE/.env" ~/.openclaw/
 
           [ -d "$BASE/memory" ] && cp -a "$BASE/memory" ~/.openclaw/
           [ -d "$BASE/credentials" ] && cp -a "$BASE/credentials" ~/.openclaw/
 
           echo "✅ State restored"
-          
+
       # 🔐 Auth setup
       - name: Configure OpenClaw Google auth
         run: |
@@ -97,9 +106,8 @@ jobs:
           openclaw gateway install
           openclaw gateway run &
           sleep 25
-          echo "🚀 OpenClaw running..."
 
-          # extra debug
+          echo "🚀 OpenClaw running..."
           ps aux | grep openclaw || true
 
           END=$((SECONDS+17700))
@@ -111,50 +119,41 @@ jobs:
 
           openclaw gateway stop || true
 
-      # 📜 Show logs (helps debug Telegram)
+      # 📜 Logs
       - name: Show logs
         run: |
           echo "---- LOG OUTPUT ----"
           find ~/.openclaw -name "*.log" -exec tail -n 50 {} \; || true
 
-      # 💾 Save state back to PRIVATE repo
-      - name: Save and push state to Private Repo
+      # 💾 Save state → PRIVATE repo
+      - name: Save and push state
         run: |
           cd openclaw_sync
 
-          BASE="openclaw_sync"
-
           git config user.email "${{ secrets.GITHUBMAIL }}"
           git config user.name "${{ secrets.GITHUBNAME }}"
 
-          mkdir -p $BASE/workspace $BASE/memory $BASE/credentials
+          mkdir -p workspace memory credentials
 
-          rsync -av --exclude='venv' --exclude='node_modules' ~/.openclaw/workspace/ $BASE/workspace/
-          cp ~/.openclaw/openclaw.json $BASE/openclaw.json 2>/dev/null || true
-          cp ~/.openclaw/.env $BASE/.env 2>/dev/null || true
-          cp -r ~/.openclaw/memory/* $BASE/memory/ 2>/dev/null || true
-          cp -r ~/.openclaw/credentials/* $BASE/credentials/ 2>/dev/null || true
+          rsync -av --exclude='venv' --exclude='node_modules' ~/.openclaw/workspace/ workspace/ || true
+          cp ~/.openclaw/openclaw.json . 2>/dev/null || true
+          cp ~/.openclaw/.env . 2>/dev/null || true
+          cp -r ~/.openclaw/memory/* memory/ 2>/dev/null || true
+          cp -r ~/.openclaw/credentials/* credentials/ 2>/dev/null || true
 
           git add .
 
-          git commit -m "Initial commit" || true
+          # commit only if changes exist
+          git diff --cached --quiet || git commit -m "Update OpenClaw state $(date)"
 
-          if git diff-index --quiet HEAD; then
-            git commit --allow-empty -m "Cycle restart"
-          else
-            git commit -m "Update OpenClaw state"
-          fi
+          git push https://${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git HEAD:main
 
-          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git
-
-      # 🟢 Keep Public Repo Alive
-
-      - name: Empty Commit to Public Repo
+      # 🟢 Keep PUBLIC repo alive
+      - name: Keepalive commit
         run: |
           git config user.email "${{ secrets.GITHUBMAIL }}"
           git config user.name "${{ secrets.GITHUBNAME }}"
-          
-          git commit --allow-empty -m "Keepalive: Run cycle completed at $(date)"
-          
-          # 'origin' এর বদলে সরাসরি PAT_TOKEN সহ URL ব্যবহার করুন
-          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git main
+
+          git commit --allow-empty -m "Keepalive: $(date)"
+
+          git push https://${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
