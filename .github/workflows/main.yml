@@ -60,7 +60,7 @@ jobs:
         run: |
           mkdir -p ~/.openclaw
 
-          BASE="openclaw_sync"
+          BASE="openclaw_sync/openclaw_sync"
 
           [ -d "$BASE/workspace" ] && cp -a "$BASE/workspace" ~/.openclaw/
           [ -f "$BASE/openclaw.json" ] && cp "$BASE/openclaw.json" ~/.openclaw/
