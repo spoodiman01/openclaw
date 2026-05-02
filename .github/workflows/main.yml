@@ -110,7 +110,7 @@ jobs:
           echo "🚀 OpenClaw running..."
           ps aux | grep openclaw || true
 
-          END=$((SECONDS+177))
+          END=$((SECONDS+19800))
           
 
           while [ $SECONDS -lt $END ]; do
