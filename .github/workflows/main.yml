@@ -5,10 +5,8 @@ on:
   push:
     branches:
       - main
-#  schedule:
- #   - cron: "0 */5 * * *"   # every 5 hours
 
-# 🔐 IMPORTANT: allow push
+# 🔐 Allow push
 permissions:
   contents: write
 
@@ -22,7 +20,7 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      # 📥 Checkout PUBLIC repo (this repo)
+      # 📥 Checkout PUBLIC repo (this repo) – needed only to access workflow files if any.
       - name: Checkout public repo
         uses: actions/checkout@v4
 
@@ -55,19 +53,20 @@ jobs:
           openclaw plugins disable acpx || true
           openclaw plugins uninstall acpx || true
 
-      # 📂 Restore state
+      # 📂 Restore state (now reads from repo root)
       - name: Restore OpenClaw State
         run: |
           mkdir -p ~/.openclaw
+          cd openclaw_sync
 
-          BASE="openclaw_sync/openclaw_sync"
+          for dir in workspace memory credentials; do
+            if [ -d "$dir" ]; then
+              cp -a "$dir" ~/.openclaw/
+            fi
+          done
 
-          [ -d "$BASE/workspace" ] && cp -a "$BASE/workspace" ~/.openclaw/
-          [ -f "$BASE/openclaw.json" ] && cp "$BASE/openclaw.json" ~/.openclaw/
-          [ -f "$BASE/.env" ] && cp "$BASE/.env" ~/.openclaw/
-
-          [ -d "$BASE/memory" ] && cp -a "$BASE/memory" ~/.openclaw/
-          [ -d "$BASE/credentials" ] && cp -a "$BASE/credentials" ~/.openclaw/
+          [ -f "openclaw.json" ] && cp openclaw.json ~/.openclaw/
+          [ -f ".env" ] && cp .env ~/.openclaw/
 
           echo "✅ State restored"
 
@@ -111,8 +110,6 @@ jobs:
           ps aux | grep openclaw || true
 
           END=$((SECONDS+19800))
-          
-
           while [ $SECONDS -lt $END ]; do
             echo "⏳ Alive: $SECONDS sec"
             sleep 60
@@ -126,7 +123,7 @@ jobs:
           echo "---- LOG OUTPUT ----"
           find ~/.openclaw -name "*.log" -exec tail -n 50 {} \; || true
 
-      # 💾 Save state → PRIVATE repo
+      # 💾 Save state → PRIVATE repo (repo root)
       - name: Save and push state
         run: |
           cd openclaw_sync
@@ -149,7 +146,7 @@ jobs:
 
           git push https://${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git HEAD:main
 
-      # 🟢 Keep PUBLIC repo alive
+      # 🟢 Keep PUBLIC repo alive (clean clone push to trigger new run)
       - name: Keepalive commit (clean clone)
         run: |
           git clone https://${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git keepalive_temp
