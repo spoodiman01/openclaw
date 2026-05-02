@@ -150,11 +150,11 @@ jobs:
           git push https://${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git HEAD:main
 
       # 🟢 Keep PUBLIC repo alive
-      - name: Keepalive commit
+      - name: Keepalive commit (clean clone)
         run: |
+          git clone https://${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git keepalive_temp
+          cd keepalive_temp
           git config user.email "${{ secrets.GITHUBMAIL }}"
           git config user.name "${{ secrets.GITHUBNAME }}"
-
           git commit --allow-empty -m "Keepalive: $(date)"
-
-          git push https://${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+          git push origin HEAD:main
