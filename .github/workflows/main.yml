@@ -124,15 +124,21 @@ jobs:
           find ~/.openclaw -name "*.log" -exec tail -n 50 {} \; || true
 
       # 💾 Save state → PRIVATE repo (repo root)
+      # 💾 Save state → PRIVATE repo (repo root)
       - name: Save and push state
         run: |
           cd openclaw_sync
+          
+          # 1. Initialize if clone failed or repo is empty
+          if [ ! -d ".git" ]; then
+            git init
+            git remote add origin https://${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git
+          fi
 
           git config user.email "${{ secrets.GITHUBMAIL }}"
           git config user.name "${{ secrets.GITHUBNAME }}"
 
           mkdir -p workspace memory credentials
-
           rsync -av --exclude='venv' --exclude='node_modules' ~/.openclaw/workspace/ workspace/ || true
           cp ~/.openclaw/openclaw.json . 2>/dev/null || true
           cp ~/.openclaw/.env . 2>/dev/null || true
@@ -141,10 +147,18 @@ jobs:
 
           git add .
 
-          # commit only if changes exist
-          git diff --cached --quiet || git commit -m "Update OpenClaw state $(date)"
-
-          git push https://${{ secrets.PAT_TOKEN }}@github.com/spoodiman01/opensync.git HEAD:main
+          # 2. Only commit and push if there are actual changes
+          if ! git diff --cached --quiet; then
+            git commit -m "Update OpenClaw state $(date)"
+            
+            # 3. Pull first to handle the [rejected] error
+            # We use -X theirs to prioritize your new state in case of conflicts
+            git pull --rebase -X theirs origin main
+            
+            git push origin HEAD:main
+          else
+            echo "No changes to save."
+          fi
 
       # 🟢 Keep PUBLIC repo alive (clean clone push to trigger new run)
       - name: Keepalive commit (clean clone)
