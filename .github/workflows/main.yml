@@ -44,7 +44,7 @@ jobs:
       # ⚙️ Install OpenClaw
       - name: Install OpenClaw
         run: |
-          npm install -g openclaw@2026.4.22
+          npm install -g openclaw@2026.5.7
           openclaw --version
 
       # ❌ Disable problematic plugin
