@@ -99,21 +99,30 @@ jobs:
           }
           EOF
 
-      # 🚀 Run OpenClaw
-      - name: Run OpenClaw Gateway
-        run: |
-          openclaw gateway install
-          openclaw gateway run &
-          sleep 25
+       # 🚀 Run OpenClaw
+       - name: Run OpenClaw Gateway
+         run: |
+           openclaw gateway install
+           openclaw gateway run &
+           sleep 25
+      
+           echo "🚀 OpenClaw running..."
+           ps aux | grep openclaw || true
+      
+       # 🤖 Start AIASS Bot  
+       - name: Start AIASS Bot
+         run: |
+           pip install -r ~/.openclaw/workspace/aiass/requirements.txt
+           nohup python3 ~/.openclaw/workspace/aiass/main.py > ~/.openclaw/workspace/aiass/bot.log 2>&1 &
+           echo "🤖 AIASS Bot started in background"
+      
+      
+           END=$((SECONDS+19800))
+           while [ $SECONDS -lt $END ]; do
+           echo "⏳ Alive: $SECONDS sec"
+           sleep 60
+           done
 
-          echo "🚀 OpenClaw running..."
-          ps aux | grep openclaw || true
-
-          END=$((SECONDS+19800))
-          while [ $SECONDS -lt $END ]; do
-            echo "⏳ Alive: $SECONDS sec"
-            sleep 60
-          done
 
           openclaw gateway stop || true
 
