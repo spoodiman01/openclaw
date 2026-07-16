@@ -117,7 +117,7 @@ jobs:
           echo "🤖 AIASS Bot started in background"
 
           pip install -r ~/.openclaw/workspace/sch/requirements.txt
-          nohup python3 ~/.openclaw/workspace/sch/main.py
+          nohup python3 ~/.openclaw/workspace/sch/main.py > ~/.openclaw/workspace/sch/bot.log 2>&1 &
           echo "🤖 AIASS Bot started in background"
           
           END=$((SECONDS+19800))
